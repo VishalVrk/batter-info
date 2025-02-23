@@ -1,40 +1,65 @@
 import { useEffect, useState } from "react";
 import { Line } from "react-chartjs-2";
 import { Chart, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from "chart.js";
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue } from "firebase/database";
+import { ref, onValue } from "firebase/database";
+import { database } from '../firebase';
 
-// Register necessary Chart.js components
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-// Firebase Config
-const firebaseConfig = {
-  apiKey: "AIzaSyCP_1TLZsGjGYHsS2me-2p0Fn1sOS4GOw8",
-  authDomain: "bulkprojec.firebaseapp.com",
-  databaseURL: "https://bulkprojec-default-rtdb.firebaseio.com",
-  projectId: "bulkprojec",
-  storageBucket: "bulkprojec.firebasestorage.app",
-  messagingSenderId: "925789645395",
-  appId: "1:925789645395:web:db14801943ab7fb02034a6"
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: false
+    }
+  },
+  scales: {
+    x: {
+      grid: {
+        color: "rgba(255, 255, 255, 0.1)"
+      },
+      ticks: {
+        color: "#94a3b8"
+      }
+    },
+    y: {
+      grid: {
+        color: "rgba(255, 255, 255, 0.1)"
+      },
+      ticks: {
+        color: "#94a3b8"
+      }
+    }
+  }
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+const createChartData = (labels, data, color) => ({
+  labels,
+  datasets: [
+    {
+      data,
+      borderColor: color,
+      backgroundColor: `${color}33`,
+      tension: 0.3,
+      fill: true,
+      pointRadius: 2,
+    },
+  ],
+});
 
 const BatteryChart = () => {
   const [batteryData, setBatteryData] = useState([]);
 
   useEffect(() => {
-    // Reference to the 'battery' node in Firebase
-    const batteryRef = ref(db, "battery");
+    const batteryRef = ref(database, "battery");
 
-    // Listen for real-time updates
     onValue(batteryRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         setBatteryData((prevData) => [
-          ...prevData.slice(-9), // Keep last 9 records to prevent overflow
+          ...prevData.slice(-9),
           {
             timestamp: new Date().toLocaleTimeString(),
             charge: data.charge,
@@ -46,61 +71,69 @@ const BatteryChart = () => {
       }
     });
 
-    // Cleanup function to detach listener when component unmounts
     return () => {
-      onValue(batteryRef, () => {}); 
+      onValue(batteryRef, () => {});
     };
   }, []);
 
   if (batteryData.length === 0) {
-    return <p className="text-center text-gray-600">Waiting for battery data...</p>;
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400 font-marker">
+        Waiting for battery data...
+      </div>
+    );
   }
 
-  // Extract data for the chart
   const labels = batteryData.map((entry) => entry.timestamp);
-  const chargeData = batteryData.map((entry) => entry.charge);
-  const currentData = batteryData.map((entry) => entry.current);
-  const dischargeData = batteryData.map((entry) => entry.discharge);
-  const voltageData = batteryData.map((entry) => entry.voltage);
 
-  const data = {
-    labels,
-    datasets: [
-      {
-        label: "Charge",
-        data: chargeData,
-        borderColor: "red",
-        backgroundColor: "rgba(255, 0, 0, 0.3)",
-        tension: 0.3,
-      },
-      {
-        label: "Current",
-        data: currentData,
-        borderColor: "blue",
-        backgroundColor: "rgba(0, 0, 255, 0.3)",
-        tension: 0.3,
-      },
-      {
-        label: "Discharge",
-        data: dischargeData,
-        borderColor: "green",
-        backgroundColor: "rgba(0, 255, 0, 0.3)",
-        tension: 0.3,
-      },
-      {
-        label: "Voltage",
-        data: voltageData,
-        borderColor: "purple",
-        backgroundColor: "rgba(128, 0, 128, 0.3)",
-        tension: 0.3,
-      },
-    ],
-  };
+  const charts = [
+    {
+      title: "Charge",
+      data: batteryData.map((entry) => entry.charge),
+      color: "#ef4444",
+      unit: "%"
+    },
+    {
+      title: "Current",
+      data: batteryData.map((entry) => entry.current),
+      color: "#3b82f6",
+      unit: "A"
+    },
+    {
+      title: "Discharge",
+      data: batteryData.map((entry) => entry.discharge),
+      color: "#22c55e",
+      unit: "W"
+    },
+    {
+      title: "Voltage",
+      data: batteryData.map((entry) => entry.voltage),
+      color: "#a855f7",
+      unit: "V"
+    }
+  ];
 
   return (
-    <div className="p-4 bg-white rounded-lg shadow">
-      <h2 className="text-lg font-semibold text-center mb-4">Battery Status (Live)</h2>
-      <Line data={data} />
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {charts.map((chart, index) => (
+        <div 
+          key={index} 
+          className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg"
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-marker text-white">{chart.title}</h3>
+            <span className="text-2xl font-caveat text-slate-300">
+              {batteryData[batteryData.length - 1][chart.title.toLowerCase()]}{chart.unit}
+            </span>
+          </div>
+          <div className="h-48">
+            <Line
+              data={createChartData(labels, chart.data, chart.color)}
+              options={chartOptions}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
